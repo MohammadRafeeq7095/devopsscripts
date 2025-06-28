@@ -1,0 +1,65 @@
+---
+- name: Setup Tomcat
+  hosts: all
+  become: yes
+  tasks:
+    - name: Download tomcat from dlcdn
+      get_url:
+        url: "https://downloads.apache.org/tomcat/tomcat-10/v10.1.41/bin/apache-tomcat-10.1.41.tar.gz"
+        dest: "/root/"
+
+    - name: untar the apache file
+      command: tar -zxvf apache-tomcat-10.1.41.tar.gz
+      args:
+        chdir: /root
+
+    - name: Rename the tomcat
+      command: mv apache-tomcat-10.1.41 tomcat
+      args:
+        chdir: /root
+
+    - name: Install the latest available Java (OpenJDK)
+      yum:
+        name: java-17-amazon-corretto
+        state: present
+
+    - name: Setting the roles in tomcat-users.xml file
+      template:
+        src: tomcat-users.xml     # removed space before `.xml`
+        dest: /root/tomcat/conf/tomcat-users.xml
+
+    - name: Delete two lines in context.xml
+      template:
+        src: context.xml
+        dest: /root/tomcat/webapps/manager/META-INF/context.xml
+
+    - name: Create Tomcat systemd Service File
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Server
+          After=network.target
+
+          [Service]
+          User=root
+          Group=root
+          Type=forking
+          Environment="JAVA_HOME=/usr/lib/jvm/jre"
+          Environment="CATALINA_HOME=/root/tomcat"
+          ExecStart=/root/tomcat/bin/startup.sh
+          ExecStop=/root/tomcat/bin/shutdown.sh
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start tomcat Service
+      service:
+        name: tomcat
+        state: started       # fixed typo: stanted → started
+        enabled: yes
